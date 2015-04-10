@@ -1,13 +1,11 @@
-
-# This file is part of the Multivariate Splines library.
+# This file is part of the Splinter library.
 # Copyright (C) 2012 Bjarne Grimstad (bjarne.grimstad@gmail.com)
 #
 # This Source Code Form is subject to the terms of the Mozilla Public
 # License, v. 2.0. If a copy of the MPL was not distributed with this
 # file, You can obtain one at http://mozilla.org/MPL/2.0/.
 
-
-project(multivariate-splines)
+project(splinter)
 cmake_minimum_required(VERSION 2.8)
 set(CMAKE_BUILD_TYPE Release)
 
@@ -15,9 +13,9 @@ if(WIN32)
     set(CMAKE_CXX_FLAGS_RELEASE "-O2")
 endif(WIN32)
 
-set(MULTIVARIATESPLINES_VERSION_MAJOR 1)
-set(MULTIVARIATESPLINES_VERSION_MINOR 2)
-set(MULTIVARIATESPLINES_VERSION ${MULTIVARIATESPLINES_VERSION_MAJOR}-${MULTIVARIATESPLINES_VERSION_MINOR})
+set(SPLINTER_VERSION_MAJOR 1)
+set(SPLINTER_VERSION_MINOR 2)
+set(SPLINTER_VERSION ${SPLINTER_VERSION_MAJOR}-${SPLINTER_VERSION_MINOR})
 
 set(CMAKE_MODULE_PATH ${CMAKE_MODULE_PATH} "${CMAKE_SOURCE_DIR}/cmake/")
 
@@ -87,12 +85,12 @@ set(SRC_LIST
     src/mykroneckerproduct.cpp
 )
 
-set(SHARED_LIBRARY multivariate-splines-${MULTIVARIATESPLINES_VERSION})
-set(STATIC_LIBRARY multivariate-splines-static-${MULTIVARIATESPLINES_VERSION})
+set(SHARED_LIBRARY splinter-${SPLINTER_VERSION})
+set(STATIC_LIBRARY splinter-static-${SPLINTER_VERSION})
 
-set(SHARED_LIBRARY_TEST "multivariate-splines-shared-test")
-set(STATIC_LIBRARY_TEST "multivariate-splines-static-test")
-set(SERIALIZE_TEST "multivariate-splines-serialize-test")
+set(SHARED_LIBRARY_TEST "splinter-shared-test")
+set(STATIC_LIBRARY_TEST "splinter-static-test")
+set(SERIALIZE_TEST "splinter-serialize-test")
 set(TESTING_UTILITIES ${CMAKE_CURRENT_SOURCE_DIR}/test/testingutilities.cpp)
 
 # Add output library: add_library(libname [SHARED | STATIC] sourcelist)
@@ -129,7 +127,6 @@ install(
 # Used to debug warnings
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-long-long -pedantic")
 
-
 # Ensure compatibility with gams
 set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fabi-version=2")
  
@@ -137,3 +134,25 @@ set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fabi-version=2")
 set(GAMSPATH "/opt/gams24.2")
 target_link_libraries(${SHARED_LIBRARY} "-Wl,-rpath=${GAMSPATH} -LIBDIR=${GAMSPATH} -static-libstdc++" )
 
+# Need to specify c++ std on OSX Yosemite
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-long-long -std=c++11")
+
+# Doxygen documentation
+find_package(Doxygen)
+
+if(DOXYGEN_FOUND)
+
+  configure_file(
+    ${PROJECT_SOURCE_DIR}/docs/Doxyfile.in
+    ${PROJECT_BINARY_DIR}/Doxyfile
+    @ONLY)
+
+  add_custom_target(
+    doc
+#      ALL
+    ${DOXYGEN_EXECUTABLE}
+    ${PROJECT_BINARY_DIR}/Doxyfile
+    COMMENT "Generating API documentation with Doxygen"
+    VERBATIM)
+    
+endif(DOXYGEN_FOUND)

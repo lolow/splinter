@@ -1,5 +1,5 @@
 /*
- * This file is part of the Multivariate Splines library.
+ * This file is part of the Splinter library.
  * Copyright (C) 2012 Bjarne Grimstad (bjarne.grimstad@gmail.com)
  *
  * This Source Code Form is subject to the terms of the Mozilla Public
@@ -8,15 +8,15 @@
 */
 
 
-#ifndef MS_BSPLINE_H
-#define MS_BSPLINE_H
+#ifndef SPLINTER_BSPLINE_H
+#define SPLINTER_BSPLINE_H
 
 #include "datatable.h"
 #include "generaldefinitions.h"
 #include "spline.h"
 #include "bsplinebasis.h"
 
-namespace MultivariateSplines
+namespace Splinter
 {
 
 // Enum for different B-spline types
@@ -26,7 +26,7 @@ enum class BSplineType
     QUADRATIC_FREE,     // Quadratic spline with free end conditions.
     //CUBIC_HERMITE,    // Cubic spline with Hermite end conditions. Interpolates all points. Not implemented.
     //CUBIC_NATURAL,    // Cubic spline with Natural end conditions. Interpolates all points. Ensures second derivative of B-spline is zero at end points. Not implemented.
-    CUBIC_FREE          // Cubic spline with Free end conditions. Interpolates all points. Ensures p'th derivative continuous at x(2) and x(n-1). p+1-regular knot sequence with two deleted knots.
+    CUBIC_FREE          // Cubic spline with Free end conditions. Interpolates all points. Ensures p'th derivative continuous at x(2) and x(n-1).
     //CUBIC_PERIODIC,   // Cubic spline with Periodic end conditions. Not implemented.
 };
 
@@ -64,21 +64,27 @@ public:
     // Getters
     unsigned int getNumVariables() const { return numVariables; }
     unsigned int getNumControlPoints() const { return coefficients.cols(); }
-
+    std::vector<unsigned int> getNumBasisFunctions() const;
     std::vector< std::vector<double> > getKnotVectors() const;
-
+    std::vector<unsigned int> getBasisDegrees() const;
     std::vector<double> getDomainUpperBound() const;
     std::vector<double> getDomainLowerBound() const;
 
     // Control point related
     void setControlPoints(DenseMatrix &controlPoints);
     DenseMatrix getControlPoints() const;
-    bool checkControlPoints() const;
+    void checkControlPoints() const;
 
     // B-spline operations
-    bool reduceDomain(std::vector<double> lb, std::vector<double> ub, bool doRegularizeKnotVectors = true, bool doRefineKnotVectors = false);
+    void reduceDomain(std::vector<double> lb, std::vector<double> ub, bool doRegularizeKnotVectors = true);
 
-    bool insertKnots(double tau, unsigned int dim, unsigned int multiplicity = 1); // TODO: move back to private
+    // Perform global knot refinement
+    void globalKnotRefinement(); // All knots in one shabang
+
+    // Perform a local knot refinement at x
+    void localKnotRefinement(DenseVector x);
+
+    void insertKnots(double tau, unsigned int dim, unsigned int multiplicity = 1); // TODO: move back to private after testing
 
     void save(const std::string fileName) const override;
 
@@ -101,11 +107,8 @@ protected:
 private:
 
     // Domain reduction
-    bool regularizeKnotVectors(std::vector<double> &lb, std::vector<double> &ub);
+    void regularizeKnotVectors(std::vector<double> &lb, std::vector<double> &ub);
     bool removeUnsupportedBasisFunctions(std::vector<double> &lb, std::vector<double> &ub);
-
-    // Knot insertion and refinement
-    bool refineKnotVectors(); // All knots in one shabang
 
     // Helper functions
     bool pointInDomain(DenseVector x) const;
@@ -114,6 +117,6 @@ private:
     void loadBasis(std::vector<std::vector<double>> knotVectors, std::vector<unsigned int> basisDegrees);
 };
 
-} // namespace MultivariateSplines
+} // namespace Splinter
 
-#endif // MS_BSPLINE_H
+#endif // SPLINTER_BSPLINE_H

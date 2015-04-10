@@ -1,5 +1,5 @@
 /*
- * This file is part of the Multivariate Splines library.
+ * This file is part of the Splinter library.
  * Copyright (C) 2012 Bjarne Grimstad (bjarne.grimstad@gmail.com)
  *
  * This Source Code Form is subject to the terms of the Mozilla Public
@@ -7,13 +7,12 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
 
-
-#ifndef MS_BSPLINEBASIS1D_H
-#define MS_BSPLINEBASIS1D_H
+#ifndef SPLINTER_BSPLINEBASIS1D_H
+#define SPLINTER_BSPLINEBASIS1D_H
 
 #include "generaldefinitions.h"
 
-namespace MultivariateSplines
+namespace Splinter
 {
 
 enum class KnotVectorType
@@ -36,8 +35,9 @@ public:
     DenseVector evaluateFirstDerivative(double x) const; // Depricated
 
     // Knot vector related
-    bool refineKnots(SparseMatrix &A);
-    bool insertKnots(SparseMatrix &A, double tau, unsigned int multiplicity = 1);
+    SparseMatrix refineKnots();
+    SparseMatrix refineKnotsLocally(double x);
+    SparseMatrix insertKnots(double tau, unsigned int multiplicity = 1);
     // bool insertKnots(SparseMatrix &A, std::vector<tuple<double,int>> newKnots); // Add knots at several locations
     unsigned int knotMultiplicity(double tau) const; // Returns the number of repetitions of tau in the knot vector
 
@@ -50,14 +50,20 @@ public:
     std::vector<double> getKnotVector() const { return knots; }
     unsigned int getBasisDegree() const { return degree; }
     double getKnotValue(unsigned int index) const;
-    unsigned int numBasisFunctions() const;
-    unsigned int numBasisFunctionsTarget() const;
+    unsigned int getNumBasisFunctions() const;
+    unsigned int getNumBasisFunctionsTarget() const;
 
     // Index getters
     std::vector<int> indexSupportedBasisfunctions(double x) const;
     int indexHalfopenInterval(double x) const;
     unsigned int indexLongestInterval() const;
     unsigned int indexLongestInterval(const std::vector<double> &vec) const;
+
+    // Setters
+    void setNumBasisFunctionsTarget(unsigned int target)
+    {
+        targetNumBasisfunctions = std::max(degree+1, target);
+    }
 
 private:
 
@@ -69,7 +75,7 @@ private:
     SparseMatrix buildBasisMatrix(double x, unsigned int u, unsigned int k, bool diff = false) const;
 
     // Builds knot insertion matrix
-    bool buildKnotInsertionMatrix(SparseMatrix &A, const std::vector<double> &refinedKnots) const;
+    SparseMatrix buildKnotInsertionMatrix(const std::vector<double> &refinedKnots) const;
 
     // Helper functions
     bool inHalfopenInterval(double x, double x_min, double x_max) const;
@@ -83,12 +89,14 @@ private:
     std::vector<double> knotVectorRegular(std::vector<double>& X) const;
     std::vector<double> knotVectorFree(std::vector<double>& X) const;
 
+    std::vector<double> computeKnotVector(std::vector<double> samples, unsigned int degree);
+
     // Member variables
     unsigned int degree;
     std::vector<double> knots;
     unsigned int targetNumBasisfunctions;
 };
 
-} // namespace MultivariateSplines
+} // namespace Splinter
 
-#endif // MS_BSPLINEBASIS1D_H
+#endif // SPLINTER_BSPLINEBASIS1D_H

@@ -1,5 +1,5 @@
 /*
- * This file is part of the Multivariate Splines library.
+ * This file is part of the Splinter library.
  * Copyright (C) 2012 Bjarne Grimstad (bjarne.grimstad@gmail.com)
  *
  * This Source Code Form is subject to the terms of the Mozilla Public
@@ -7,12 +7,11 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
 
-
 #include "include/bsplinebasis1d.h"
 #include <iostream>
 #include <algorithm>
 
-namespace MultivariateSplines
+namespace Splinter
 {
 
 BSplineBasis1D::BSplineBasis1D(std::vector<double> &x, unsigned int degree)
@@ -22,7 +21,7 @@ BSplineBasis1D::BSplineBasis1D(std::vector<double> &x, unsigned int degree)
 
 BSplineBasis1D::BSplineBasis1D(std::vector<double> &x, unsigned int degree, KnotVectorType knotVectorType)
     : degree(degree),
-      targetNumBasisfunctions(degree+1+2) // Minimum p+1
+      targetNumBasisfunctions((degree+1)+2*degree+1) // Minimum p+1
 {
     if (knotVectorType == KnotVectorType::EXPLICIT)
     {
@@ -46,13 +45,17 @@ BSplineBasis1D::BSplineBasis1D(std::vector<double> &x, unsigned int degree, Knot
         knots = x;
     }
 
-    assert(degree > 0);
-    assert(isKnotVectorRegular());
+    if (degree <= 0)
+        throw Exception("BSplineBasis1D::BSplineBasis1D: Cannot create B-spline basis functions of degree <= 0.");
+
+    // NOTE: this exception is too strict (multiple start and end knots should not be required)
+    if (!isKnotVectorRegular())
+        throw Exception("BSplineBasis1D::BSplineBasis1D: Knot vector is not regular.");
 }
 
 SparseVector BSplineBasis1D::evaluate(double x) const
 {
-    SparseVector basisvalues(numBasisFunctions());
+    SparseVector basisvalues(getNumBasisFunctions());
 
     supportHack(x);
 
@@ -61,7 +64,7 @@ SparseVector BSplineBasis1D::evaluate(double x) const
     basisvalues.reserve(indexSupported.size());
 
     // Iterate through the nonzero basisfunctions and store functionvalues
-    for (auto it = indexSupported.begin(); it != indexSupported.end(); it++)
+    for (auto it = indexSupported.begin(); it != indexSupported.end(); ++it)
     {
         basisvalues.insert(*it) = deBoorCox(x, *it, degree);
     }
@@ -91,11 +94,11 @@ SparseVector BSplineBasis1D::evaluateDerivative(double x, int r) const
     int p = degree;
 
     // Continuity requirement
-    //assert(p >= r+1);
-    if (!(p >= r+1))
+    //assert(p > r);
+    if (p <= r)
     {
         // Return zero-gradient
-        SparseVector DB(numBasisFunctions());
+        SparseVector DB(getNumBasisFunctions());
         return DB;
     }
 
@@ -105,7 +108,7 @@ SparseVector BSplineBasis1D::evaluateDerivative(double x, int r) const
 
     int knotIndex = indexHalfopenInterval(x);
 
-    // Algorithm 3.18 from Lyche and Moerken 2011
+    // Algorithm 3.18 from Lyche and Moerken (2011)
     SparseMatrix B(1,1);
     B.insert(0,0) = 1;
 
@@ -126,7 +129,7 @@ SparseVector BSplineBasis1D::evaluateDerivative(double x, int r) const
     assert(B.cols() == p+1);
 
     // From row vector to extended column vector
-    SparseVector DB(numBasisFunctions());
+    SparseVector DB(getNumBasisFunctions());
     DB.reserve(p+1);
     int i = knotIndex-p; // First insertion index
     for (int k = 0; k < B.outerSize(); ++k)
@@ -142,7 +145,7 @@ SparseVector BSplineBasis1D::evaluateDerivative(double x, int r) const
 DenseVector BSplineBasis1D::evaluateFirstDerivative(double x) const
 {
     DenseVector values;
-    values.setZero(numBasisFunctions());
+    values.setZero(getNumBasisFunctions());
 
     supportHack(x);
 
@@ -212,12 +215,12 @@ SparseMatrix BSplineBasis1D::buildBasisMatrix(double x, unsigned int u, unsigned
             {
                 // Insert diagonal element
                 double a = (knots.at(u+1+i) - x)/dk;
-                if(a != 0)
+                if (a != 0)
                     R.insert(i,i) = a;
 
                 // Insert super-diagonal element
                 double b = (x - knots.at(u+1+i-k))/dk;
-                if(b != 0)
+                if (b != 0)
                     R.insert(i,i+1) = b;
             }
         }
@@ -265,31 +268,34 @@ double BSplineBasis1D::deBoorCoxCoeff(double x, double x_min, double x_max) cons
 }
 
 // Insert knots and compute knot insertion matrix (to update control points)
-bool BSplineBasis1D::insertKnots(SparseMatrix &A, double tau, unsigned int multiplicity)
+SparseMatrix BSplineBasis1D::insertKnots(double tau, unsigned int multiplicity)
 {
-    if (!insideSupport(tau) || knotMultiplicity(tau) + multiplicity > degree + 1)
-        return false;
+    if (!insideSupport(tau))
+        throw Exception("BSplineBasis1D::insertKnots: Cannot insert knot outside domain!");
+
+    if (knotMultiplicity(tau) + multiplicity > degree + 1)
+        throw Exception("BSplineBasis1D::insertKnots: Knot multiplicity is too high!");
 
     // New knot vector
     int index = indexHalfopenInterval(tau);
 
     std::vector<double> extKnots = knots;
-    for(unsigned int i = 0; i < multiplicity; i++)
+    for (unsigned int i = 0; i < multiplicity; i++)
         extKnots.insert(extKnots.begin()+index+1, tau);
 
-    assert(isKnotVectorRegular(extKnots));
+    if (!isKnotVectorRegular(extKnots))
+        throw Exception("BSplineBasis1D::insertKnots: New knot vector is not regular!");
 
     // Return knot insertion matrix
-    if (!buildKnotInsertionMatrix(A, extKnots))
-        return false;
+    SparseMatrix A = buildKnotInsertionMatrix(extKnots);
 
     // Update knots
     knots = extKnots;
 
-    return true;
+    return A;
 }
 
-bool BSplineBasis1D::refineKnots(SparseMatrix &A)
+SparseMatrix BSplineBasis1D::refineKnots()
 {
     // Build refine knot vector
     std::vector<double> refinedKnots = knots;
@@ -299,36 +305,91 @@ bool BSplineBasis1D::refineKnots(SparseMatrix &A)
     {
         int index = indexLongestInterval(refinedKnots);
         double newKnot = (refinedKnots.at(index) + refinedKnots.at(index+1))/2.0;
-        refinedKnots.insert(lower_bound(refinedKnots.begin(), refinedKnots.end(), newKnot), newKnot);
+        refinedKnots.insert(std::lower_bound(refinedKnots.begin(), refinedKnots.end(), newKnot), newKnot);
     }
 
-    assert(isKnotVectorRegular(refinedKnots) && isRefinement(refinedKnots));
+    if (!isKnotVectorRegular(refinedKnots) || !isRefinement(refinedKnots))
+        throw Exception("BSplineBasis1D::refineKnots: New knot vector is not a proper refinement!");
 
     // Return knot insertion matrix
-    if (!buildKnotInsertionMatrix(A, refinedKnots))
-    {
-        return false;
-    }
+    SparseMatrix A = buildKnotInsertionMatrix(refinedKnots);
 
     // Update knots
     knots = refinedKnots;
 
-    return true;
+    return A;
 }
 
-bool BSplineBasis1D::buildKnotInsertionMatrix(SparseMatrix &A, const std::vector<double> &refinedKnots) const
+SparseMatrix BSplineBasis1D::refineKnotsLocally(double x)
+{
+    if (!insideSupport(x))
+        throw Exception("BSplineBasis1D::refineKnotsLocally: Cannot refine outside support!");
+
+    if (getNumBasisFunctions() >= getNumBasisFunctionsTarget()
+            || assertNear(knots.front(), knots.back()))
+    {
+        unsigned int n = getNumBasisFunctions();
+        DenseMatrix A = DenseMatrix::Identity(n,n);
+        return A.sparseView();
+    }
+
+    // Refined knot vector
+    std::vector<double> refinedKnots = knots;
+
+    auto upper = std::lower_bound(refinedKnots.begin(), refinedKnots.end(), x);
+
+    // Check left boundary
+    if (upper == refinedKnots.begin())
+        std::advance(upper, degree+1);
+
+    // Get previous iterator
+    auto lower = std::prev(upper);
+
+    // Do not insert if upper and lower bounding knot are close
+    if (assertNear(*upper, *lower))
+    {
+        unsigned int n = getNumBasisFunctions();
+        DenseMatrix A = DenseMatrix::Identity(n,n);
+        return A.sparseView();
+    }
+
+    // Insert knot at x
+    double insertVal = x;
+
+    // Adjust x if it is on or close to a knot
+    if (knotMultiplicity(x) > 0
+            || assertNear(*upper, x, 1e-6, 1e-6)
+            || assertNear(*lower, x, 1e-6, 1e-6))
+    {
+        insertVal = (*upper + *lower)/2.0;
+    }
+
+    // Insert new knot
+    refinedKnots.insert(upper, insertVal);
+
+    if (!isKnotVectorRegular(refinedKnots) || !isRefinement(refinedKnots))
+        throw Exception("BSplineBasis1D::refineKnotsLocally: New knot vector is not a proper refinement!");
+
+    // Build knot insertion matrix
+    SparseMatrix A = buildKnotInsertionMatrix(refinedKnots);
+
+    // Update knots
+    knots = refinedKnots;
+
+    return A;
+}
+
+SparseMatrix BSplineBasis1D::buildKnotInsertionMatrix(const std::vector<double> &refinedKnots) const
 {
     if (!isRefinement(refinedKnots))
-    {
-        throw Exception("BSplineBasis1D::buildKnotInsertionMatrix: New knot vector is not a proper refinement of the old!");
-    }
+        throw Exception("BSplineBasis1D::buildKnotInsertionMatrix: New knot vector is not a proper refinement!");
 
     std::vector<double> knotsAug = refinedKnots;
     unsigned int n = knots.size() - degree - 1;
     unsigned int m = knotsAug.size() - degree - 1;
 
-    //SparseMatrix A(m,n);
-    A.resize(m,n);
+    SparseMatrix A(m,n);
+    //A.resize(m,n);
     A.reserve(Eigen::VectorXi::Constant(n,degree+1));
 
     // Build A row-by-row
@@ -346,7 +407,7 @@ bool BSplineBasis1D::buildKnotInsertionMatrix(SparseMatrix &A, const std::vector
         }
 
         // Size check
-        if (R.rows() != 1 || R.cols() != degree+1)
+        if (R.rows() != 1 || R.cols() != (int)degree+1)
         {
             throw Exception("BSplineBasis1D::buildKnotInsertionMatrix: Incorrect matrix dimensions!");
         }
@@ -362,7 +423,7 @@ bool BSplineBasis1D::buildKnotInsertionMatrix(SparseMatrix &A, const std::vector
 
     A.makeCompressed();
 
-    return true;
+    return A;
 }
 
 /*
@@ -385,9 +446,7 @@ void BSplineBasis1D::supportHack(double &x) const
 int BSplineBasis1D::indexHalfopenInterval(double x) const
 {
     if (x < knots.front() || x > knots.back())
-    {
         throw Exception("BSplineBasis1D::indexHalfopenInterval: x outside knot interval!");
-    }
 
     // Find first knot that is larger than x
     std::vector<double>::const_iterator it = std::upper_bound(knots.begin(), knots.end(), x);
@@ -401,9 +460,7 @@ bool BSplineBasis1D::reduceSupport(double lb, double ub, SparseMatrix &A)
 {
     // Check bounds
     if (lb < knots.front() || ub > knots.back())
-    {
         return false;
-    }
 
     unsigned int k = degree + 1;
 
@@ -445,13 +502,13 @@ bool BSplineBasis1D::reduceSupport(double lb, double ub, SparseMatrix &A)
     si.insert(si.begin(), knots.begin()+index_lower, knots.begin()+index_upper+k+1);
 
     // Construct selection matrix A
-    int n_old = knots.size()-k; // Current number of basis functions
-    int n_new = si.size()-k; // Number of basis functions after update
+    int numOld = knots.size()-k; // Current number of basis functions
+    int numNew = si.size()-k; // Number of basis functions after update
 
-    if (n_old < n_new) return false;
+    if (numOld < numNew) return false;
 
-    DenseMatrix Ad = DenseMatrix::Zero(n_old, n_new);
-    Ad.block(index_lower, 0, n_new, n_new) = DenseMatrix::Identity(n_new, n_new);
+    DenseMatrix Ad = DenseMatrix::Zero(numOld, numNew);
+    Ad.block(index_lower, 0, numNew, numNew) = DenseMatrix::Identity(numNew, numNew);
     A = Ad.sparseView();
 
     // Update knots
@@ -462,11 +519,6 @@ bool BSplineBasis1D::reduceSupport(double lb, double ub, SparseMatrix &A)
 
 double BSplineBasis1D::getKnotValue(unsigned int index) const
 {
-    if (index >= knots.size())
-    {
-        throw Exception("BSplineBasis1D:getKnotValue: Invalid knot index - Out of Range");
-    }
-
     return knots.at(index);
 }
 
@@ -485,12 +537,12 @@ bool BSplineBasis1D::insideSupport(double x) const
     return (knots.front() <= x) && (x <= knots.back());
 }
 
-unsigned int BSplineBasis1D::numBasisFunctions() const
+unsigned int BSplineBasis1D::getNumBasisFunctions() const
 {
     return knots.size() - (degree + 1);
 }
 
-unsigned int BSplineBasis1D::numBasisFunctionsTarget() const
+unsigned int BSplineBasis1D::getNumBasisFunctionsTarget() const
 {
     return targetNumBasisfunctions;
 }
@@ -564,7 +616,7 @@ bool BSplineBasis1D::isKnotVectorRegular(const std::vector<double> &vec) const
     // Check multiplicity of knots
     for (std::vector<double>::const_iterator it = vec.begin(); it != vec.end(); ++it)
     {
-        if(count(vec.begin(), vec.end(), *it) > degree+1)
+        if (count(vec.begin(), vec.end(), *it) > degree+1)
             return false;
     }
 
@@ -761,4 +813,36 @@ std::vector<double> BSplineBasis1D::linspace(double start, double stop, unsigned
     return ret;
 }
 
-} // namespace MultivariateSplines
+/*
+ * Automatic selection of knot vector for all degrees
+ * NOTE: Not finished, needs testing!
+ */
+std::vector<double> BSplineBasis1D::computeKnotVector(std::vector<double> samples, unsigned int degree)
+{
+    assert(degree >= 1);
+    assert(samples.size() >= degree + 1);
+    unsigned int numSamples = samples.size();
+
+    unsigned int numRemove = degree-1;
+    for (unsigned int i = 0; i < numRemove; ++i)
+    {
+        // Distance to nearest neighbour
+        std::vector<double> distVec(samples.size(), 0);
+        for (unsigned int i = 1; i < samples.size()-1; ++i)
+            distVec.at(i) = samples.at(i+1) - samples.at(i-1);
+
+        auto nn = std::min_element(distVec.begin()+1, distVec.end()-1); // Cannot remove first and last element
+        auto inn = nn - distVec.begin();
+        samples.erase(samples.begin() + inn);
+    }
+
+    assert(samples.size() == numSamples - numRemove);
+
+    // Add p knots to each end
+
+    //assert(samples.size() == numSamples + degree + 1);
+
+    return samples;
+}
+
+} // namespace Splinter

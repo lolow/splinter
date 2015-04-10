@@ -1,5 +1,5 @@
 /*
- * This file is part of the Multivariate Splines library.
+ * This file is part of the Splinter library.
  * Copyright (C) 2012 Bjarne Grimstad (bjarne.grimstad@gmail.com)
  *
  * This Source Code Form is subject to the terms of the Mozilla Public
@@ -7,9 +7,8 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
 
-
-#ifndef MS_GENERALDEFINITIONS_H
-#define MS_GENERALDEFINITIONS_H
+#ifndef SPLINTER_GENERALDEFINITIONS_H
+#define SPLINTER_GENERALDEFINITIONS_H
 
 #ifndef NDEBUG
     #include <iostream>
@@ -23,7 +22,7 @@
 #include <Eigen/Dense>
 #include <Eigen/Sparse>
 
-namespace MultivariateSplines
+namespace Splinter
 {
 
 // Eigen vectors
@@ -33,6 +32,16 @@ typedef Eigen::SparseVector<double> SparseVector;
 // Eigen matrices
 typedef Eigen::MatrixXd DenseMatrix;
 typedef Eigen::SparseMatrix<double> SparseMatrix; // declares a column-major sparse matrix type of double
+
+// Compare two numbers
+template<typename T>
+bool assertNear(T x, T y, double tolAbs = 1e-8, double tolRel = 1e-8)
+{
+    double dx = std::abs(x - y);
+    double xAbs = 0.5*(std::abs(x) + std::abs(y));
+    double err = std::max(tolAbs, tolRel*xAbs);
+    return dx < err;
+}
 
 class Exception : public std::exception
 {
@@ -52,6 +61,6 @@ public:
     }
 };
 
-} // namespace MultivariateSplines
+} // namespace Splinter
 
-#endif // MS_GENERALDEFINITIONS_H
+#endif // SPLINTER_GENERALDEFINITIONS_H

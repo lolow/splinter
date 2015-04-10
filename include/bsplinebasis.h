@@ -1,5 +1,5 @@
 /*
- * This file is part of the Multivariate Splines library.
+ * This file is part of the Splinter library.
  * Copyright (C) 2012 Bjarne Grimstad (bjarne.grimstad@gmail.com)
  *
  * This Source Code Form is subject to the terms of the Mozilla Public
@@ -7,14 +7,13 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
 
-
-#ifndef MS_BSPLINEBASIS_H
-#define MS_BSPLINEBASIS_H
+#ifndef SPLINTER_BSPLINEBASIS_H
+#define SPLINTER_BSPLINEBASIS_H
 
 #include "generaldefinitions.h"
 #include "bsplinebasis1d.h"
 
-namespace MultivariateSplines
+namespace Splinter
 {
 
 class BSplineBasis
@@ -30,12 +29,13 @@ public:
     SparseVector eval(const DenseVector &x) const;
     SparseMatrix evalBasisJacobian(DenseVector &x) const;
     DenseMatrix evalBasisJacobianOld(DenseVector &x) const; // Depricated
+    DenseMatrix evalBasisJacobianFast(DenseVector &x) const; // Depricated
     SparseMatrix evalBasisHessian(DenseVector &x) const;
 
-    // Knot insertion
-    bool refineKnots(SparseMatrix &A);
-    bool insertKnots(SparseMatrix &A, double tau, unsigned int dim, unsigned int multiplicity = 1);
-    //bool insertKnots(SparseMatrix &A, std::vector<std::tuple<double,int,int>> tau, unsigned int dim, unsigned int multiplicity = 1);
+    // Knot vector manipulation
+    SparseMatrix refineKnots();
+    SparseMatrix refineKnotsLocally(DenseVector x);
+    SparseMatrix insertKnots(double tau, unsigned int dim, unsigned int multiplicity = 1);
 
     // Getters
     BSplineBasis1D getSingleBasis(int dim);
@@ -44,15 +44,14 @@ public:
 
     std::vector<unsigned int> getBasisDegrees() const;
     unsigned int getBasisDegree(unsigned int dim) const;
-    unsigned int numBasisFunctions() const;
-    unsigned int numBasisFunctions(unsigned int dim) const;
+    unsigned int getNumBasisFunctions() const;
+    unsigned int getNumBasisFunctions(unsigned int dim) const;
+    std::vector<unsigned int> getNumBasisFunctionsTarget() const;
 
     double getKnotValue(int dim, int index) const;
     unsigned int getKnotMultiplicity(unsigned int dim, double tau) const;
     unsigned int getLargestKnotInterval(unsigned int dim) const;
 
-    std::vector<int> getTensorIndexDimension() const;
-    std::vector<int> getTensorIndexDimensionTarget() const;
     int supportedPrInterval() const;
 
     bool insideSupport(DenseVector &x) const;
@@ -67,6 +66,6 @@ private:
     unsigned int numVariables;
 };
 
-} // namespace MultivariateSplines
+} // namespace Splinter
 
-#endif // MS_BSPLINEBASIS_H
+#endif // SPLINTER_BSPLINEBASIS_H

@@ -1,5 +1,5 @@
 /*
- * This file is part of the Multivariate Splines library.
+ * This file is part of the Splinter library.
  * Copyright (C) 2012 Bjarne Grimstad (bjarne.grimstad@gmail.com)
  *
  * This Source Code Form is subject to the terms of the Mozilla Public
@@ -7,11 +7,10 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
 
-
 #include "pspline.h"
 #include "include/linearsolvers.h"
 
-namespace MultivariateSplines
+namespace Splinter
 {
 
 PSpline::PSpline(const DataTable &samples)
@@ -107,7 +106,7 @@ void PSpline::computeControlPoints(const DataTable &samples)
         DenseQR s;
         bool successfulSolve = s.solve(Ld, Rx, Cx) && s.solve(Ld, Ry, Cy);
 
-        if(!successfulSolve)
+        if (!successfulSolve)
         {
             throw Exception("PSpline::computeControlPoints: Failed to solve for B-spline coefficients.");
         }
@@ -123,28 +122,28 @@ void PSpline::getSecondOrderFiniteDifferenceMatrix(SparseMatrix &D)
 {
 
     // Number of (total) basis functions - defines the number of columns in D
-    int numCols = basis.numBasisFunctions();
+    int numCols = basis.getNumBasisFunctions();
 
-    // Number of basis functions (and coefficients) in each dimension
-    std::vector < int > dims = basis.getTensorIndexDimension();
+    // Number of basis functions (and coefficients) in each variable
+    std::vector<unsigned int> dims;
+    for (unsigned int i = 0; i < numVariables; i++)
+        dims.push_back(basis.getNumBasisFunctions(i));
+
     std::reverse(dims.begin(), dims.end());
 
-    // Number of variables
-    int vars = dims.size();
-
-    for (int i=0; i < vars; i++)
+    for (unsigned int i=0; i < numVariables; i++)
     {
-        // Need at least three coefficients in each dimension
-        assert(basis.numBasisFunctions(i) >= 3);
+        // Need at least three coefficients in each variable
+        assert(basis.getNumBasisFunctions(i) >= 3);
     }
 
     // Number of rows in D and in each block
     int numRows = 0;
     std::vector< int > numBlkRows;
-    for (int i = 0; i < vars; i++)
+    for (unsigned int i = 0; i < numVariables; i++)
     {
         int prod = 1;
-        for (int j = 0; j < vars; j++)
+        for (unsigned int j = 0; j < numVariables; j++)
         {
             if (i == j)
                 prod *= (dims[j] - 2);
@@ -157,20 +156,20 @@ void PSpline::getSecondOrderFiniteDifferenceMatrix(SparseMatrix &D)
 
     // Resize and initialize D
     D.resize(numRows, numCols);                         // Resize (transpose because of reservation fn)
-    D.reserve(DenseVector::Constant(numCols,2*vars));   // D has no more than two elems per col per dim
+    D.reserve(DenseVector::Constant(numCols,2*numVariables));   // D has no more than two elems per col per dim
 
     int i = 0;                                          // Row index
     // Loop though each dimension (each dimension has its own block)
-    for (int d = 0; d < vars; d++)
+    for (unsigned int d = 0; d < numVariables; d++)
     {
         // Calculate left and right products
         int leftProd = 1;
         int rightProd = 1;
-        for (int k = 0; k < d; k++)
+        for (unsigned int k = 0; k < d; k++)
         {
             leftProd *= dims[k];
         }
-        for (int k = d+1; k < vars; k++)
+        for (unsigned int k = d+1; k < numVariables; k++)
         {
             rightProd *= dims[k];
         }
@@ -181,7 +180,7 @@ void PSpline::getSecondOrderFiniteDifferenceMatrix(SparseMatrix &D)
             // Start column of current subblock
             int blkBaseCol = j*leftProd*dims[d];
             // Block rows [I -2I I] of subblock
-            for (int l = 0; l < (dims[d] - 2); l++)
+            for (unsigned int l = 0; l < (dims[d] - 2); l++)
             {
                 // Special case for first dimension
                 if (d == 0)
@@ -213,7 +212,7 @@ void PSpline::getSecondOrderFiniteDifferenceMatrix(SparseMatrix &D)
     }
 
 //    // Number of (total) basis functions - defines the number of columns in D
-//    int numCols = basis.numBasisFunctions();
+//    int numCols = basis.getNumBasisFunctions();
 
 //    // Number of basis functions (and coefficients) in each dimension
 //    std::vector < int > dims = basis.getTensorIndexDimension();
@@ -225,8 +224,8 @@ void PSpline::getSecondOrderFiniteDifferenceMatrix(SparseMatrix &D)
 //    for (int i=0; i < vars; i++)
 //    {
 //        // Need at least three coefficients in each dimension
-//        assert(basis.numBasisFunctions(i) >= 3);
-//        dims.push_back(basis.numBasisFunctions(i));
+//        assert(basis.getNumBasisFunctions(i) >= 3);
+//        dims.push_back(basis.getNumBasisFunctions(i));
 //    }
 
 //    // Number of rows in D and in each block
@@ -297,4 +296,4 @@ void PSpline::getSecondOrderFiniteDifferenceMatrix(SparseMatrix &D)
     D.makeCompressed();
 }
 
-} // namespace MultivariateSplines
+} // namespace Splinter

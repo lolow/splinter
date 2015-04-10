@@ -1,5 +1,5 @@
 /*
- * This file is part of the Multivariate Splines library.
+ * This file is part of the Splinter library.
  * Copyright (C) 2012 Bjarne Grimstad (bjarne.grimstad@gmail.com)
  *
  * This Source Code Form is subject to the terms of the Mozilla Public
@@ -7,15 +7,14 @@
  * file, You can obtain one at http://mozilla.org/MPL/2.0/.
 */
 
-
-#ifndef MS_RBFSPLINE_H
-#define MS_RBFSPLINE_H
+#ifndef SPLINTER_RBFSPLINE_H
+#define SPLINTER_RBFSPLINE_H
 
 #include "datatable.h"
 #include "spline.h"
 #include "memory"
 
-namespace MultivariateSplines
+namespace Splinter
 {
 
 enum class RadialBasisFunctionType
@@ -37,6 +36,7 @@ public:
     RadialBasisFunction(double e) : e(e) {}
     virtual double eval(double r) const = 0;
     virtual double evalDerivative(double r) const = 0;
+    virtual ~RadialBasisFunction() {}
 protected:
     double e;
 };
@@ -164,7 +164,7 @@ public:
     {
         // Compare dist to origin
         assert(getDim() == rhs.getDim());
-        if(dist() < rhs.dist())
+        if (dist() < rhs.dist())
             return true;
         return false;
     }
@@ -217,7 +217,7 @@ public:
     {
         assert(getDim() == rhs.getDim());
         double sum = 0;
-        for(unsigned int i=0; i<getDim(); i++)
+        for (unsigned int i=0; i<getDim(); i++)
             sum += (p.at(i)-rhs.getPoint().at(i))*(p.at(i)-rhs.getPoint().at(i));
         return std::sqrt(sum);
     }
@@ -240,6 +240,6 @@ private:
     unsigned int i;
 };
 
-} // namespace MultivariateSplines
+} // namespace Splinter
 
-#endif // MS_RBFSPLINE_H
+#endif // SPLINTER_RBFSPLINE_H

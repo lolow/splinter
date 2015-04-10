@@ -1,5 +1,5 @@
 /*
- * This file is part of the Multivariate Splines library.
+ * This file is part of the Splinter library.
  * Copyright (C) 2012 Bjarne Grimstad (bjarne.grimstad@gmail.com)
  *
  * This Source Code Form is subject to the terms of the Mozilla Public
@@ -12,7 +12,7 @@
 #include "include/mykroneckerproduct.h"
 #include "unsupported/Eigen/KroneckerProduct"
 
-namespace MultivariateSplines
+namespace Splinter
 {
 
 BSplineBasis::BSplineBasis()
@@ -26,7 +26,8 @@ BSplineBasis::BSplineBasis(std::vector< std::vector<double> > &X, std::vector<un
 
 BSplineBasis::BSplineBasis(std::vector< std::vector<double> > &X, std::vector<unsigned int> basisDegrees, KnotVectorType knotVectorType)
 {
-    assert(X.size() == basisDegrees.size());
+    if (X.size() != basisDegrees.size())
+        throw Exception("BSplineBasis::BSplineBasis: Incompatible sizes. Number of knot vectors is not equal to size of degree vector.");
 
     setUnivariateBases(X, basisDegrees, knotVectorType);
 }
@@ -38,7 +39,14 @@ void BSplineBasis::setUnivariateBases(std::vector< std::vector<double> > &X, std
     for (unsigned int i = 0; i < numVariables; i++)
     {
         bases.push_back(BSplineBasis1D(X.at(i), basisDegrees.at(i), knotVectorType));
-    }
+
+        // Adjust target number of basis functions used in e.g. refinement
+        if (numVariables > 2)
+        {
+            // One extra knot is allowed
+            bases.at(i).setNumBasisFunctionsTarget((basisDegrees.at(i)+1)+1); // Minimum degree+1
+        }
+    } 
 }
 
 SparseVector BSplineBasis::eval(const DenseVector &x) const
@@ -66,7 +74,7 @@ SparseVector BSplineBasis::eval(const DenseVector &x) const
     }
 
     // Return correct vector
-    if (tv1.size() == numBasisFunctions())
+    if (tv1.size() == (int)getNumBasisFunctions())
     {
         return tv1;
     }
@@ -77,7 +85,7 @@ SparseVector BSplineBasis::eval(const DenseVector &x) const
 DenseMatrix BSplineBasis::evalBasisJacobianOld(DenseVector &x) const
 {
     // Jacobian basis matrix
-    DenseMatrix J; J.setZero(numBasisFunctions(), numVariables);
+    DenseMatrix J; J.setZero(getNumBasisFunctions(), numVariables);
 
     // Calculate partial derivatives
     for (unsigned int i = 0; i < numVariables; i++)
@@ -100,7 +108,6 @@ DenseMatrix BSplineBasis::evalBasisJacobianOld(DenseVector &x) const
             }
 
             bi = kroneckerProduct(temp, xi);
-            //bi = kroneckerProduct(bi, xi).eval();
         }
 
         // Fill out column
@@ -110,19 +117,81 @@ DenseMatrix BSplineBasis::evalBasisJacobianOld(DenseVector &x) const
     return J;
 }
 
+DenseMatrix BSplineBasis::evalBasisJacobianFast(DenseVector &x) const
+{
+    // Jacobian basis matrix
+    DenseMatrix J; J.setZero(getNumBasisFunctions(), numVariables);
+
+    // Evaluate B-spline basis functions before looping
+    std::vector<DenseVector> func(numVariables);
+    std::vector<DenseVector> grad(numVariables);
+
+    for (unsigned int i = 0; i < numVariables; ++i)
+    {
+        func[i] = bases.at(i).evaluate(x(i));
+        grad[i] = bases.at(i).evaluateFirstDerivative(x(i));
+    }
+
+    // Calculate partial derivatives
+    for (unsigned int i = 0; i < numVariables; ++i)
+    {
+        // One column in basis jacobian
+        DenseVector bi; bi.setOnes(1);
+        DenseVector bi2 = bi;
+
+        for (unsigned int j = 0; j < numVariables; ++j)
+        {
+            if (j % 2 == 0)
+            {
+                if (j == i)
+                {
+                    // Differentiated basis
+                    bi = kroneckerProduct(bi2, grad.at(j));
+                }
+                else
+                {
+                    // Normal basis
+                    bi = kroneckerProduct(bi2, func.at(j));
+                }
+            }
+            else
+            {
+                if (j == i)
+                {
+                    // Differentiated basis
+                    bi2 = kroneckerProduct(bi, grad.at(j));
+                }
+                else
+                {
+                    // Normal basis
+                    bi2 = kroneckerProduct(bi, func.at(j));
+                }
+            }
+        }
+
+        // Fill out column
+        if (bi.size() == getNumBasisFunctions())
+            J.block(0,i,bi.rows(),1) = bi.block(0,0,bi.rows(),1);
+        else
+            J.block(0,i,bi2.rows(),1) = bi2.block(0,0,bi2.rows(),1);
+    }
+
+    return J;
+}
+
 SparseMatrix BSplineBasis::evalBasisJacobian(DenseVector &x) const
 {
     // Jacobian basis matrix
-    SparseMatrix J(numBasisFunctions(), numVariables);
+    SparseMatrix J(getNumBasisFunctions(), numVariables);
     //J.setZero(numBasisFunctions(), numInputs);
 
     // Calculate partial derivatives
-    for (unsigned int i = 0; i < numVariables; i++)
+    for (unsigned int i = 0; i < numVariables; ++i)
     {
         // One column in basis jacobian
         SparseMatrix Ji(1,1);
         Ji.insert(0,0) = 1;
-        for (unsigned int j = 0; j < numVariables; j++)
+        for (unsigned int j = 0; j < numVariables; ++j)
         {
             SparseMatrix temp = Ji;
             SparseMatrix xi;
@@ -168,7 +237,7 @@ SparseMatrix BSplineBasis::evalBasisHessian(DenseVector &x) const
      * so that basis hessian H is in R^(numBasisFunctions*numInputs x numInputs)
      * The real B-spline Hessian is calculated as (c^T x 1^(numInputs x 1))*H
      */
-    SparseMatrix H(numBasisFunctions()*numVariables, numVariables);
+    SparseMatrix H(getNumBasisFunctions()*numVariables, numVariables);
     //H.setZero(numBasisFunctions()*numInputs, numInputs);
 
     // Calculate partial derivatives
@@ -208,7 +277,7 @@ SparseMatrix BSplineBasis::evalBasisHessian(DenseVector &x) const
             {
                 if (it.value() != 0)
                 {
-                    int row = i*numBasisFunctions()+it.row();
+                    int row = i*getNumBasisFunctions()+it.row();
                     int col = j;
                     H.insert(row,col) = it.value();
                 }
@@ -221,9 +290,10 @@ SparseMatrix BSplineBasis::evalBasisHessian(DenseVector &x) const
     return H;
 }
 
-bool BSplineBasis::insertKnots(SparseMatrix &A, double tau, unsigned int dim, unsigned int multiplicity)
+SparseMatrix BSplineBasis::insertKnots(double tau, unsigned int dim, unsigned int multiplicity)
 {
-    A.resize(1,1);
+    SparseMatrix A(1,1);
+//    A.resize(1,1);
     A.insert(0,0) = 1;
 
     // Calculate multivariate knot insertion matrix
@@ -235,46 +305,61 @@ bool BSplineBasis::insertKnots(SparseMatrix &A, double tau, unsigned int dim, un
         if (i == dim)
         {
             // Build knot insertion matrix
-            if (!bases.at(i).insertKnots(Ai, tau, multiplicity))
-                return false;
+            Ai = bases.at(i).insertKnots(tau, multiplicity);
         }
         else
         {
             // No insertion - identity matrix
-            int m = bases.at(i).numBasisFunctions();
+            int m = bases.at(i).getNumBasisFunctions();
             Ai.resize(m,m);
             Ai.setIdentity();
         }
 
         //A = kroneckerProduct(temp, Ai);
-        myKroneckerProduct(temp,Ai,A);
+        myKroneckerProduct(temp, Ai, A);
     }
 
     A.makeCompressed();
 
-    return true;
+    return A;
 }
 
-bool BSplineBasis::refineKnots(SparseMatrix &A)
+SparseMatrix BSplineBasis::refineKnots()
 {
-    A.resize(1,1);
+    SparseMatrix A(1,1);
     A.insert(0,0) = 1;
 
     for (unsigned int i = 0; i < numVariables; i++)
     {
         SparseMatrix temp = A;
-        SparseMatrix Ai;
-
-        if (!bases.at(i).refineKnots(Ai))
-            return false;
+        SparseMatrix Ai = bases.at(i).refineKnots();
 
         //A = kroneckerProduct(temp, Ai);
-        myKroneckerProduct(temp,Ai,A);
+        myKroneckerProduct(temp, Ai, A);
     }
 
     A.makeCompressed();
 
-    return true;
+    return A;
+}
+
+SparseMatrix BSplineBasis::refineKnotsLocally(DenseVector x)
+{
+    SparseMatrix A(1,1);
+    A.insert(0,0) = 1;
+
+    for (unsigned int i = 0; i < numVariables; i++)
+    {
+        SparseMatrix temp = A;
+        SparseMatrix Ai = bases.at(i).refineKnotsLocally(x(i));
+
+        //A = kroneckerProduct(temp, Ai);
+        myKroneckerProduct(temp, Ai, A);
+    }
+
+    A.makeCompressed();
+
+    return A;
 }
 
 bool BSplineBasis::reduceSupport(std::vector<double>& lb, std::vector<double>& ub, SparseMatrix &A)
@@ -315,17 +400,17 @@ unsigned int BSplineBasis::getBasisDegree(unsigned int dim) const
     return bases.at(dim).getBasisDegree();
 }
 
-unsigned int BSplineBasis::numBasisFunctions(unsigned int dim) const
+unsigned int BSplineBasis::getNumBasisFunctions(unsigned int dim) const
 {
-    return bases.at(dim).numBasisFunctions();
+    return bases.at(dim).getNumBasisFunctions();
 }
 
-unsigned int BSplineBasis::numBasisFunctions() const
+unsigned int BSplineBasis::getNumBasisFunctions() const
 {
     unsigned int prod = 1;
-    for(unsigned int dim = 0; dim < numVariables; dim++)
+    for (unsigned int dim = 0; dim < numVariables; dim++)
     {
-        prod *= bases.at(dim).numBasisFunctions();
+        prod *= bases.at(dim).getNumBasisFunctions();
     }
     return prod;
 }
@@ -363,22 +448,12 @@ unsigned int BSplineBasis::getLargestKnotInterval(unsigned int dim) const
     return bases.at(dim).indexLongestInterval();
 }
 
-std::vector<int> BSplineBasis::getTensorIndexDimension() const
+std::vector<unsigned int> BSplineBasis::getNumBasisFunctionsTarget() const
 {
-    std::vector<int> ret;
+    std::vector<unsigned int> ret;
     for (unsigned int dim = 0; dim < numVariables; dim++)
     {
-        ret.push_back(bases.at(dim).numBasisFunctions());
-    }
-    return ret;
-}
-
-std::vector<int> BSplineBasis::getTensorIndexDimensionTarget() const
-{
-    std::vector<int> ret;
-    for (unsigned int dim = 0; dim < numVariables; dim++)
-    {
-        ret.push_back(bases.at(dim).numBasisFunctionsTarget() );
+        ret.push_back(bases.at(dim).getNumBasisFunctionsTarget() );
     }
     return ret;
 }
@@ -432,4 +507,4 @@ std::vector<double> BSplineBasis::getSupportUpperBound() const
     return ub;
 }
 
-} // namespace MultivariateSplines
+} // namespace Splinter

@@ -29,17 +29,18 @@
 * - Added support for saving to and loading from files
 */
 
-#ifndef MS_SERIALIZE_H
-#define MS_SERIALIZE_H
+#ifndef SPLINTER_SERIALIZE_H
+#define SPLINTER_SERIALIZE_H
 
 #include <vector>
 #include <Eigen/Dense>
 #include <cassert>
 #include <fstream>
+#include <numeric>
 #include <set>
 #include <datasample.h>
 
-namespace MultivariateSplines {
+namespace Splinter {
 
 typedef std::vector<uint8_t> StreamType;
 
@@ -134,7 +135,7 @@ inline size_t get_size(const T& obj) {
 namespace detail
 {
     template <class T>
-    class serialize_helper;
+    struct serialize_helper;
 
     template <class T>
     void serializer(const T& obj, StreamType::iterator&);
@@ -416,6 +417,6 @@ inline StreamType load_from_file(std::string filename)
     return sresult;
 }
 
-} // namespace MultivariateSplines
+} // namespace Splinter
 
-#endif // MS_SERIALIZE_H
+#endif // SPLINTER_SERIALIZE_H
