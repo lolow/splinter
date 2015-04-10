@@ -18,7 +18,7 @@ CMake will try to automatically find where Eigen is installed, but if this fails
 
 
 1. Download and install [Eigen](http://eigen.tuxfamily.org/index.php?title=Main_Page)
-2. `sudo apt-get update && sudo apt-get install git cmake build-essential`
+2. `sudo apt-get update && sudo apt-get install git cmake build-essential doxygen`
 3. `git clone https://github.com/bgrimstad/splinter.git`
 4. `cd splinter`
 5. `mkdir build && cd build`
