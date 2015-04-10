@@ -1,3 +1,4 @@
+
 # This file is part of the Multivariate Splines library.
 # Copyright (C) 2012 Bjarne Grimstad (bjarne.grimstad@gmail.com)
 #
@@ -127,3 +128,12 @@ install(
 
 # Used to debug warnings
 #set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -Wall -Wno-long-long -pedantic")
+
+
+# Ensure compatibility with gams
+set(CMAKE_CXX_FLAGS "${CMAKE_CXX_FLAGS} -fabi-version=2")
+ 
+# GAMS PATH to link the right version libstdc++
+set(GAMSPATH "/opt/gams24.2")
+target_link_libraries(${SHARED_LIBRARY} "-Wl,-rpath=${GAMSPATH} -LIBDIR=${GAMSPATH} -static-libstdc++" )
+
